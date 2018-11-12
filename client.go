@@ -45,12 +45,16 @@ func ClientMain() {
 		// rsync shell cmd line
 		// opening connection using:
 		// ./netpipe-client -addr "1.1.1.1:50887" -- -l user 1.1.1.1 rsync --server --sender -vvlogDtprze.iLsf . "~/file"
-		args := flag.Args()
-		if len(args) <= 4 {
+		fs := flag.NewFlagSet("", flag.ContinueOnError)
+		_ = fs.String("l", "", "user")
+		_ = fs.Parse(flag.Args())
+		args := fs.Args()	// skip -l user
+
+		if len(args) <= 4 || args[1] != "rsync" {
 			log.Fatalf("[ERROR] bad rsync args: %v", args)
 		}
 
-		rsyncCmd := strings.Join(args[3:], " ") // skip -l user 1.1.1.1
+		rsyncCmd := strings.Join(args[1:], " ") // skip ip 1.1.1.1
 		log.Printf("rsync cmd: %v", rsyncCmd)
 
 		_, err := conn.Write([]byte("exec " + rsyncCmd + "\n"))
