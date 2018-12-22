@@ -3,6 +3,7 @@ package netpipe
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -46,12 +47,24 @@ func handler(conn *net.TCPConn, param *serverParam) {
 
 	// cmd -> conn
 	go func() {
-		CopyAndClose(wg, TCPConn2Writer{conn}, stdout)
+		defer wg.Done()
+		defer conn.CloseWrite()
+
+		_, err := io.Copy(conn, stdout)
+		if err != nil {
+			log.Printf("[ERROR] io.Copy(): %v", err)
+		}
 		log.Printf("cmd -> conn done")
 	}()
 	// conn -> cmd
 	go func() {
-		CopyAndClose(wg, stdin, conn)
+		defer wg.Done()
+		defer stdin.Close()
+
+		_, err := io.Copy(stdin, conn)
+		if err != nil {
+			log.Printf("[ERROR] io.Copy(): %v", err)
+		}
 		log.Printf("conn -> cmd done")
 	}()
 

@@ -2,6 +2,7 @@ package netpipe
 
 import (
 	"flag"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -68,12 +69,24 @@ func ClientMain() {
 
 	// stdin -> conn
 	go func() {
-		CopyAndClose(wg, TCPConn2Writer{conn}, os.Stdin)
+		defer wg.Done()
+		defer conn.CloseWrite()
+
+		_, err := io.Copy(conn, os.Stdin)
+		if err != nil {
+			log.Printf("[ERROR] io.Copy(): %v", err)
+		}
 		log.Printf("stdin -> conn done")
 	}()
 	// conn -> stdout
 	go func() {
-		CopyAndClose(wg, os.Stdout, conn)
+		defer wg.Done()
+		defer os.Stdout.Close()
+
+		_, err := io.Copy(os.Stdout, conn)
+		if err != nil {
+			log.Printf("[ERROR] io.Copy(): %v", err)
+		}
 		log.Printf("conn -> stdout done")
 		// rsync will not close stdout, causing stdin -> conn hang
 		if param.rsync {
