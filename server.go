@@ -13,6 +13,7 @@ import (
 
 type serverParam struct {
 	cmdline []string
+	key     string
 }
 
 func handler(conn *net.TCPConn, param *serverParam) {
@@ -50,7 +51,8 @@ func handler(conn *net.TCPConn, param *serverParam) {
 		defer wg.Done()
 		defer conn.CloseWrite()
 
-		_, err := io.Copy(conn, stdout)
+		writer := makeWriter(param.key+"server2client", conn)
+		_, err := io.Copy(writer, stdout)
 		if err != nil {
 			log.Printf("[ERROR] io.Copy(): %v", err)
 		}
@@ -61,7 +63,8 @@ func handler(conn *net.TCPConn, param *serverParam) {
 		defer wg.Done()
 		defer stdin.Close()
 
-		_, err := io.Copy(stdin, conn)
+		reader := makeReader(param.key+"client2server", conn)
+		_, err := io.Copy(stdin, reader)
 		if err != nil {
 			log.Printf("[ERROR] io.Copy(): %v", err)
 		}
@@ -98,6 +101,9 @@ func ServerMain() {
 		log.Fatal("empty cmdline")
 	}
 
+	// generate key
+	param.key = genKey()
+
 	// listen
 	listener, err := net.ListenTCP("tcp", nil)
 	if err != nil {
@@ -112,7 +118,7 @@ func ServerMain() {
 	pubIP := getPubIP()
 	port := listener.Addr().(*net.TCPAddr).Port
 	fmt.Printf("# rsync cmd\n")
-	fmt.Printf("rsync -vvaz -e 'netpipe-client -rsync -addr %s:%d --'\n", pubIP, port)
+	fmt.Printf("rsync -vvaz -e 'netpipe-client -rsync -addr %s:%d -key %s --'\n", pubIP, port, param.key)
 
 	for {
 		conn, err := listener.AcceptTCP()

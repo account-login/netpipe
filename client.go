@@ -12,6 +12,7 @@ import (
 
 type clientParam struct {
 	addr  string
+	key   string
 	rsync bool
 }
 
@@ -23,8 +24,9 @@ func ClientMain() {
 	// param
 	param := clientParam{}
 
-	flag.BoolVar(&param.rsync, "rsync", false, "rsync client mode")
 	flag.StringVar(&param.addr, "addr", "", "server address")
+	flag.StringVar(&param.key, "key", "", "encryption key")
+	flag.BoolVar(&param.rsync, "rsync", false, "rsync client mode")
 	flag.Parse()
 
 	// connect to server
@@ -41,6 +43,9 @@ func ClientMain() {
 
 	log.Printf("%v -> %v connected", conn.LocalAddr(), conn.RemoteAddr())
 
+	// create encrypted writer
+	writer := makeWriter(param.key+"client2server", conn)
+
 	// write rsync cmd
 	if param.rsync {
 		// rsync shell cmd line
@@ -49,7 +54,7 @@ func ClientMain() {
 		fs := flag.NewFlagSet("", flag.ContinueOnError)
 		_ = fs.String("l", "", "user")
 		_ = fs.Parse(flag.Args())
-		args := fs.Args()	// skip -l user
+		args := fs.Args() // skip -l user
 
 		if len(args) <= 4 || args[1] != "rsync" {
 			log.Fatalf("[ERROR] bad rsync args: %v", args)
@@ -58,7 +63,7 @@ func ClientMain() {
 		rsyncCmd := strings.Join(args[1:], " ") // skip ip 1.1.1.1
 		log.Printf("rsync cmd: %v", rsyncCmd)
 
-		_, err := conn.Write([]byte("exec " + rsyncCmd + "\n"))
+		_, err := writer.Write([]byte("exec " + rsyncCmd + "\n"))
 		if err != nil {
 			log.Fatalf("[ERROR] write rsync cmd: %v", err)
 		}
@@ -72,7 +77,7 @@ func ClientMain() {
 		defer wg.Done()
 		defer conn.CloseWrite()
 
-		_, err := io.Copy(conn, os.Stdin)
+		_, err := io.Copy(writer, os.Stdin)
 		if err != nil {
 			log.Printf("[ERROR] io.Copy(): %v", err)
 		}
@@ -83,7 +88,8 @@ func ClientMain() {
 		defer wg.Done()
 		defer os.Stdout.Close()
 
-		_, err := io.Copy(os.Stdout, conn)
+		reader := makeReader(param.key+"server2client", conn)
+		_, err := io.Copy(os.Stdout, reader)
 		if err != nil {
 			log.Printf("[ERROR] io.Copy(): %v", err)
 		}
